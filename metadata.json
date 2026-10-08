@@ -1,0 +1,6 @@
+{
+  "name": "AeroCode",
+  "description": "Mobile-first IDE with integrated terminal, Termux bridge, multi-language execution, Git, plugins, and local Qwen AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
