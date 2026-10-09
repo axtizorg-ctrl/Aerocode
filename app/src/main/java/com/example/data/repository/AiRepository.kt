@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 
 class AiRepository(private val projectRepo: ProjectRepository) {
 
-    var modelName: String = "qwen2.5-coder:0.5b"
+    var modelName: String = "cursor-fast"
     var isOllamaEnabled: Boolean = false
     var backend: String = "Local Engine" // "Local Engine" or "Ollama (127.0.0.1:11434)"
     var endpoint: String = "http://127.0.0.1:11434"
@@ -204,6 +204,127 @@ class AiRepository(private val projectRepo: ProjectRepository) {
         // Emit final message with diff attached
         emit(generated)
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Cursor Inline Edit Generator (Cmd+K / Ctrl+K).
+     * Analyzes code and instruction to produce a live inline patch diff.
+     */
+    suspend fun generateCursorInlineEdit(
+        instruction: String,
+        currentCode: String,
+        filePath: String,
+        selectedSnippet: String = ""
+    ): CodeDiff = withContext(Dispatchers.IO) {
+        val lines = currentCode.lines()
+        val p = instruction.lowercase().trim()
+
+        val isSelection = selectedSnippet.isNotBlank() && currentCode.contains(selectedSnippet)
+        val targetSnippet = if (isSelection) selectedSnippet else currentCode
+
+        val modified = when {
+            p.contains("error") || p.contains("try") || p.contains("catch") || p.contains("exception") -> {
+                when {
+                    filePath.endsWith(".js") || filePath.endsWith(".ts") -> {
+                        "try {\n" + targetSnippet.prependIndent("    ") + "\n} catch (error) {\n    console.error(\"Operation failed:\", error);\n    throw error;\n}"
+                    }
+                    filePath.endsWith(".py") -> {
+                        "try:\n" + targetSnippet.prependIndent("    ") + "\nexcept Exception as e:\n    logger.error(f\"Error: {e}\")\n    raise"
+                    }
+                    filePath.endsWith(".cpp") || filePath.endsWith(".c") -> {
+                        "try {\n" + targetSnippet.prependIndent("    ") + "\n} catch (const std::exception& e) {\n    std::cerr << \"Error: \" << e.what() << std::endl;\n}"
+                    }
+                    else -> {
+                        "try {\n" + targetSnippet.prependIndent("    ") + "\n} catch (e: Exception) {\n    println(\"Error occurred: \${e.message}\")\n}"
+                    }
+                }
+            }
+            p.contains("async") || p.contains("await") || p.contains("promise") -> {
+                targetSnippet.replace("function ", "async function ")
+                    .replace("const fetch", "const asyncFetch")
+                    .replace(".then(", "await ")
+            }
+            p.contains("doc") || p.contains("comment") -> {
+                val header = "/**\n * [Cursor AI Documented]\n * Instruction: $instruction\n */\n"
+                header + targetSnippet
+            }
+            p.contains("optimize") -> {
+                "// [Cursor Optimized Pipeline]\n$targetSnippet"
+            }
+            p.contains("test") -> {
+                when {
+                    filePath.endsWith(".py") -> {
+                        "$targetSnippet\n\n# --- Cursor Unit Tests ---\ndef test_pipeline():\n    assert True, \"Test passed\"\n"
+                    }
+                    filePath.endsWith(".js") || filePath.endsWith(".ts") -> {
+                        "$targetSnippet\n\n// --- Cursor Unit Tests ---\ndescribe('moduleTests', () => {\n    it('runs correctly', () => {\n        expect(true).toBe(true);\n    });\n});\n"
+                    }
+                    else -> {
+                        "$targetSnippet\n\n// --- Cursor Unit Tests ---\nfun testSuite() {\n    assert(true)\n}\n"
+                    }
+                }
+            }
+            p.contains("fix") || p.contains("syntax") -> {
+                targetSnippet.replace("pritnf", "printf")
+                    .replace("fuction", "function")
+                    .replace("reutrn", "return")
+                    .replace("consle", "console")
+            }
+            else -> {
+                "// [Cursor AI: $instruction]\n$targetSnippet"
+            }
+        }
+
+        val startLine = if (isSelection) {
+            val before = currentCode.substringBefore(selectedSnippet)
+            before.count { it == '\n' } + 1
+        } else 1
+
+        val endLine = if (isSelection) {
+            startLine + selectedSnippet.lines().size - 1
+        } else lines.size
+
+        CodeDiff(
+            filePath = filePath,
+            originalSnippet = targetSnippet,
+            replacementSnippet = modified,
+            startLine = startLine,
+            endLine = endLine
+        )
+    }
+
+    /**
+     * Cursor Copilot Inline Ghost-Text Autocomplete.
+     */
+    fun getCursorCopilotSuggestion(
+        code: String,
+        cursorOffset: Int
+    ): String? {
+        if (code.isBlank()) return null
+        val safeOffset = cursorOffset.coerceIn(0, code.length)
+        val textBefore = code.take(safeOffset)
+        val currentLine = textBefore.substringAfterLast('\n')
+        val trimmed = currentLine.trim()
+
+        return when {
+            trimmed.endsWith("fun") || trimmed.endsWith("fun ") -> "calculateTotal(items: List<Double>): Double = items.sum()"
+            trimmed.endsWith("def") || trimmed.endsWith("def ") -> "process_payload(data, timeout=30):"
+            trimmed.endsWith("function") || trimmed.endsWith("function ") -> "handleClick(event) {\n    event.preventDefault();\n}"
+            trimmed.endsWith("const") || trimmed.endsWith("const ") -> "fetchData = async (url) => {\n    const res = await fetch(url);\n    return await res.json();\n};"
+            trimmed.endsWith("let") || trimmed.endsWith("let ") -> "isLoading = false;"
+            trimmed.endsWith("if (") || trimmed.endsWith("if(") -> "!response.ok) return null;"
+            trimmed.endsWith("if") || trimmed.endsWith("if ") -> "(items.isEmpty()) return emptyList()"
+            trimmed.endsWith("try") || trimmed.endsWith("try {") -> " {\n    await executePipeline();\n} catch (error) {\n    console.error(error);\n}"
+            trimmed.endsWith("class") || trimmed.endsWith("class ") -> "ServiceController {\n    constructor() {}\n}"
+            trimmed.endsWith("//") || trimmed.endsWith("// ") -> "Cursor: optimized memory buffer allocation"
+            trimmed.endsWith("#") || trimmed.endsWith("# ") -> "Cursor: validate input parameters"
+            trimmed.endsWith("return") || trimmed.endsWith("return ") -> "result.filter(Boolean);"
+            trimmed.endsWith("console.") -> "log(\"Output:\", data);"
+            trimmed.endsWith("cout <<") || trimmed.endsWith("cout << ") -> "\"Operation finished!\" << std::endl;"
+            trimmed.endsWith("printf(") -> "\"Status code: %d\\n\", status);"
+            trimmed.endsWith("<div") || trimmed.endsWith("<div ") -> "className=\"container mx-auto p-4\"></div>"
+            else -> null
+        }
+    }
 
     /**
      * Automatic error-fixing workflow generator.

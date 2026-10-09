@@ -79,16 +79,17 @@ class ProjectRepository(private val context: Context) {
 
     fun createFile(parentPath: String, name: String, initialContent: String = ""): File? {
         val parent = File(parentPath)
+        parent.mkdirs()
         val target = File(parent, name)
         return try {
-            if (target.createNewFile()) {
-                if (initialContent.isNotEmpty()) {
-                    target.writeText(initialContent)
-                }
-                target
-            } else {
-                null
+            target.parentFile?.mkdirs()
+            if (!target.exists()) {
+                target.createNewFile()
             }
+            if (initialContent.isNotEmpty()) {
+                target.writeText(initialContent)
+            }
+            target
         } catch (e: Exception) {
             null
         }
@@ -246,18 +247,9 @@ if __name__ == "__main__":
         val webDir = File(projectsRoot, "WebPreview")
         if (!webDir.exists()) {
             webDir.mkdirs()
-            File(webDir, "Index.html").writeText(Language.HTML.sampleBoilerplate)
-            File(webDir, "Style.css").writeText("body {\n  margin: 0;\n  padding: 0;\n  background: #141720;\n  color: #eee;\n}\n")
-            File(webDir, "Input.js").writeText("""// Elements
-const res_box = document.getElementById("reason");
-const amo_box = document.getElementById("amount");
-const submit = document.getElementById("send").addEventListener;
-// storage
-const amo_con = parseInt(amo_box);
-const res_con = parseInt(res_box);
-const memory = [res_con, amo_con];
-console.log(memory);
-""")
+            File(webDir, "index.html").writeText(Language.HTML.sampleBoilerplate)
+            File(webDir, "style.css").writeText(Language.CSS.sampleBoilerplate)
+            File(webDir, "app.js").writeText(Language.JAVASCRIPT.sampleBoilerplate)
         }
     }
 }

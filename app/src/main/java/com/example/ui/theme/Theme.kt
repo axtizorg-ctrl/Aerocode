@@ -13,7 +13,7 @@ import com.example.data.model.IdeTheme
 
 @Composable
 fun MyApplicationTheme(
-    ideTheme: IdeTheme = IdeTheme.CATPPUCCIN_MOCHA,
+    ideTheme: IdeTheme = IdeTheme.CURSOR_DARK,
     globalFontFamily: FontFamily = JetBrainsMonoFontFamily,
     content: @Composable () -> Unit
 ) {

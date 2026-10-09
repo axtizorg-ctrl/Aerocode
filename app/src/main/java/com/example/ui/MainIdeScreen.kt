@@ -59,6 +59,7 @@ fun MainIdeScreen(
     if (isFullScreenWeb) {
         FullScreenWebScreen(
             viewModel = viewModel,
+            theme = theme,
             onBack = { viewModel.isFullScreenWebPreview.value = false }
         )
         return

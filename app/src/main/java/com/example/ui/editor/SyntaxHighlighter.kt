@@ -72,10 +72,22 @@ object SyntaxHighlighter {
         "map", "package", "range", "return", "select", "struct", "switch", "type", "var"
     )
 
-    private val NUMBER_PATTERN = Pattern.compile("\\b(\\d+(\\.\\d+)?([eE][+-]?\\d+)?|0x[0-9a-fA-F]+)\\b")
+    private val KEYWORDS_CSS = setOf(
+        "display", "flex", "grid", "position", "relative", "absolute", "fixed", "sticky",
+        "margin", "padding", "width", "height", "max-width", "min-width", "color",
+        "background", "background-color", "border", "border-radius", "font-family",
+        "font-size", "font-weight", "line-height", "text-align", "justify-content",
+        "align-items", "box-shadow", "transition", "transform", "cursor", "overflow",
+        "none", "block", "inline-block", "center", "pointer", "solid", "auto", "important"
+    )
+
+    private val NUMBER_PATTERN = Pattern.compile("\\b(\\d+(\\.\\d+)?([eE][+-]?\\d+)?(px|rem|em|%|vh|vw|s|ms)?|0x[0-9a-fA-F]+|#[0-9a-fA-F]{3,8})\\b")
     private val STRING_PATTERN = Pattern.compile("(\"[^\"]*\"|'[^']*'|`[^`]*`)")
     private val LINE_COMMENT_SLASH = Pattern.compile("//.*")
     private val LINE_COMMENT_HASH = Pattern.compile("#.*")
+    private val BLOCK_COMMENT_PATTERN = Pattern.compile("/\\*[\\s\\S]*?\\*/|<!--[\\s\\S]*?-->")
+    private val HTML_TAG_PATTERN = Pattern.compile("</?[a-zA-Z0-9_-]+|/?>")
+    private val HTML_ATTR_PATTERN = Pattern.compile("\\b([a-zA-Z_-]+)(?=\\=)")
     private val PREPROCESSOR_PATTERN = Pattern.compile("^\\s*#[a-zA-Z_]+.*", Pattern.MULTILINE)
 
     fun highlight(code: String, language: Language, theme: IdeTheme): AnnotatedString {
@@ -92,9 +104,30 @@ object SyntaxHighlighter {
                 Language.KOTLIN -> KEYWORDS_KOTLIN
                 Language.RUST -> KEYWORDS_RUST
                 Language.GO -> KEYWORDS_GO
+                Language.CSS -> KEYWORDS_CSS
                 Language.SHELL -> KEYWORDS_PYTHON
                 Language.PHP -> KEYWORDS_C_CPP
                 else -> emptySet()
+            }
+
+            // HTML Tag & Attribute Highlighting
+            if (language == Language.HTML) {
+                val tagMatcher = HTML_TAG_PATTERN.matcher(code)
+                while (tagMatcher.find()) {
+                    addStyle(
+                        SpanStyle(color = theme.keywordColor, fontWeight = FontWeight.Bold),
+                        tagMatcher.start(),
+                        tagMatcher.end()
+                    )
+                }
+                val attrMatcher = HTML_ATTR_PATTERN.matcher(code)
+                while (attrMatcher.find()) {
+                    addStyle(
+                        SpanStyle(color = theme.typeColor),
+                        attrMatcher.start(),
+                        attrMatcher.end()
+                    )
+                }
             }
 
             // Preprocessor directives for C/C++
@@ -170,6 +203,16 @@ object SyntaxHighlighter {
                     SpanStyle(color = theme.commentColor),
                     commentMatcher.start(),
                     commentMatcher.end()
+                )
+            }
+
+            // Block & HTML Comments
+            val blockCommentMatcher = BLOCK_COMMENT_PATTERN.matcher(code)
+            while (blockCommentMatcher.find()) {
+                addStyle(
+                    SpanStyle(color = theme.commentColor),
+                    blockCommentMatcher.start(),
+                    blockCommentMatcher.end()
                 )
             }
         }

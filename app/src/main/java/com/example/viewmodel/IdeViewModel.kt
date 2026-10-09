@@ -85,9 +85,9 @@ class IdeViewModel(application: Application) : AndroidViewModel(application) {
     // Editor Settings
     val theme = MutableStateFlow(
         try {
-            IdeTheme.valueOf(prefs.getString("theme", IdeTheme.CATPPUCCIN_MOCHA.name) ?: IdeTheme.CATPPUCCIN_MOCHA.name)
+            IdeTheme.valueOf(prefs.getString("theme", IdeTheme.CURSOR_DARK.name) ?: IdeTheme.CURSOR_DARK.name)
         } catch (_: Exception) {
-            IdeTheme.CATPPUCCIN_MOCHA
+            IdeTheme.CURSOR_DARK
         }
     )
     val fontSize = MutableStateFlow(prefs.getFloat("fontSize", 14f).coerceIn(10f, 32f))
@@ -164,13 +164,106 @@ class IdeViewModel(application: Application) : AndroidViewModel(application) {
             AiMessage(
                 id = "ai-intro",
                 sender = AiSender.QWEN,
-                text = "Hello! I am **Qwen 0.5B**, your local offline coding assistant in AeroCode.\n\nI can explain code, fix compilation errors, generate tests, and apply surgical diffs using IDE tools. How can I help you today?"
+                text = "Hello! I am **Cursor AI**, your intelligent coding companion.\n\nI can generate code, refactor functions, edit inline (Cmd+K), and apply live diffs. How can I help you today?"
             )
         )
     )
     val aiMessages: StateFlow<List<AiMessage>> = _aiMessages.asStateFlow()
     val isAiGenerating = MutableStateFlow(false)
     val activePendingDiff = MutableStateFlow<CodeDiff?>(null)
+
+    // Cursor AI Editor States (Cmd+K / Inline Edit & Copilot)
+    val isCursorInlinePromptOpen = MutableStateFlow(false)
+    val cursorInlinePromptText = MutableStateFlow("")
+    val isCursorGenerating = MutableStateFlow(false)
+    val cursorInlineDiff = MutableStateFlow<CodeDiff?>(null)
+    val cursorGhostText = MutableStateFlow<String?>(null)
+
+    fun toggleCursorInlinePrompt() {
+        isCursorInlinePromptOpen.value = !isCursorInlinePromptOpen.value
+        if (!isCursorInlinePromptOpen.value) {
+            cursorInlineDiff.value = null
+        }
+    }
+
+    fun openCursorInlinePrompt(initialPrompt: String = "") {
+        cursorInlinePromptText.value = initialPrompt
+        isCursorInlinePromptOpen.value = true
+    }
+
+    fun closeCursorInlinePrompt() {
+        isCursorInlinePromptOpen.value = false
+        cursorInlineDiff.value = null
+    }
+
+    fun submitCursorInlineEdit(instruction: String) {
+        val tab = activeTab ?: return
+        if (instruction.isBlank()) return
+        isCursorGenerating.value = true
+        viewModelScope.launch {
+            try {
+                val diff = aiRepo.generateCursorInlineEdit(
+                    instruction = instruction,
+                    currentCode = tab.content,
+                    filePath = tab.filePath
+                )
+                cursorInlineDiff.value = diff
+            } catch (_: Exception) {
+            } finally {
+                isCursorGenerating.value = false
+            }
+        }
+    }
+
+    fun acceptCursorInlineDiff() {
+        val diff = cursorInlineDiff.value ?: return
+        applyPendingDiff(diff)
+        cursorInlineDiff.value = null
+        isCursorInlinePromptOpen.value = false
+        cursorInlinePromptText.value = ""
+    }
+
+    fun rejectCursorInlineDiff() {
+        cursorInlineDiff.value = null
+    }
+
+    val activeCursorOffset = MutableStateFlow(0)
+    val activeCursorLine = MutableStateFlow(1)
+    val activeCursorCol = MutableStateFlow(1)
+
+    fun onEditorTextCursorChanged(code: String, cursorOffset: Int) {
+        val safeOffset = cursorOffset.coerceIn(0, code.length)
+        activeCursorOffset.value = safeOffset
+        val textBefore = code.take(safeOffset)
+        activeCursorLine.value = textBefore.count { it == '\n' } + 1
+        val lastNewline = textBefore.lastIndexOf('\n')
+        activeCursorCol.value = if (lastNewline >= 0) safeOffset - lastNewline else safeOffset + 1
+
+        val suggestion = aiRepo.getCursorCopilotSuggestion(code, safeOffset)
+        cursorGhostText.value = suggestion
+    }
+
+    fun insertTextAtCursor(token: String) {
+        val tab = activeTab ?: return
+        val currentContent = tab.content
+        val offset = activeCursorOffset.value.coerceIn(0, currentContent.length)
+        val inserted = if (token == "\t") "  " else token
+        val newContent = currentContent.substring(0, offset) + inserted + currentContent.substring(offset)
+        val newOffset = offset + inserted.length
+        activeCursorOffset.value = newOffset
+        onEditorContentChange(newContent)
+        onEditorTextCursorChanged(newContent, newOffset)
+    }
+
+    fun acceptCursorGhostText() {
+        val ghost = cursorGhostText.value ?: return
+        insertTextAtCursor(ghost)
+        cursorGhostText.value = null
+    }
+
+    fun dismissCursorGhostText() {
+        cursorGhostText.value = null
+    }
 
     // Modals
     val activeModal = MutableStateFlow(ActiveModal.NONE)
@@ -702,9 +795,14 @@ class IdeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // File manipulation helpers
-    fun createNewFileInProject(fileName: String) {
+    fun createNewFileInProject(fileName: String, customContent: String? = null) {
         val projDir = projectRepo.getProjectDirectory(_currentProjectName.value)
-        val file = projectRepo.createFile(projDir.absolutePath, fileName, Language.detect(fileName).sampleBoilerplate)
+        val content = if (!customContent.isNullOrEmpty()) {
+            customContent
+        } else {
+            Language.detect(fileName).sampleBoilerplate
+        }
+        val file = projectRepo.createFile(projDir.absolutePath, fileName, content)
         if (file != null) {
             refreshProjectTree()
             openFile(file.absolutePath)

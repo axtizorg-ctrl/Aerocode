@@ -81,13 +81,24 @@ if __name__ == "__main__":
     ),
     JAVASCRIPT(
         displayName = "JavaScript",
-        extensions = listOf("js", "mjs"),
-        defaultRunCommand = "node {file}",
-        sampleBoilerplate = """function greet(name) {
-    console.log("Hello " + name + " from AeroCode Node.js!");
-}
+        extensions = listOf("js", "mjs", "jsx"),
+        defaultRunCommand = "PREVIEW_WEB",
+        sampleBoilerplate = """// Modern Frontend JavaScript
+document.addEventListener("DOMContentLoaded", () => {
+    console.log("🚀 AeroCode Frontend initialized!");
 
-greet("Developer");
+    const actionBtn = document.getElementById("action-btn");
+    const outputEl = document.getElementById("output");
+    let count = 0;
+
+    if (actionBtn && outputEl) {
+        actionBtn.addEventListener("click", () => {
+            count++;
+            outputEl.textContent = "Button clicked " + count + " times!";
+            console.log("Action dispatched: count=" + count);
+        });
+    }
+});
 """
     ),
     TYPESCRIPT(
@@ -158,19 +169,20 @@ func main() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AeroCode Web App</title>
-    <style>
-        body { font-family: sans-serif; background: #12121e; color: #fff; padding: 2rem; text-align: center; }
-        h1 { color: #89b4fa; }
-        .card { background: #1e1e2e; padding: 20px; border-radius: 12px; max-width: 400px; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-        button { background: #a6e3a1; border: none; padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; color: #111; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="card">
-        <h1>AeroCode Live Preview</h1>
-        <p>Edit HTML, CSS, and JS with instant browser reload!</p>
-        <button onclick="alert('Running seamlessly on Android!')">Click Me</button>
+    <div class="container">
+        <header>
+            <h1>⚡ Modern Frontend App</h1>
+            <p>Built with AeroCode live browser preview.</p>
+        </header>
+        <main>
+            <div id="output" class="status-card">Ready to interact.</div>
+            <button id="action-btn">Click Me</button>
+        </main>
     </div>
+    <script src="app.js"></script>
 </body>
 </html>
 """
@@ -179,7 +191,74 @@ func main() {
         displayName = "CSS",
         extensions = listOf("css"),
         defaultRunCommand = "PREVIEW_WEB",
-        sampleBoilerplate = "body { margin: 0; padding: 0; background: #111; color: #eee; }"
+        sampleBoilerplate = """:root {
+    --bg-primary: #0a0a0c;
+    --bg-card: #13141a;
+    --accent: #00e5ff;
+    --text-primary: #f0f2f5;
+    --text-secondary: #8a90a2;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+}
+
+.container {
+    max-width: 500px;
+    width: 100%;
+    margin-top: 40px;
+    text-align: center;
+}
+
+h1 {
+    font-size: 24px;
+    margin-bottom: 8px;
+    color: var(--accent);
+}
+
+p {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 24px;
+}
+
+.status-card {
+    background: var(--bg-card);
+    border: 1px solid #22242e;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    font-family: monospace;
+    color: #50fa7b;
+}
+
+button {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+button:active {
+    opacity: 0.8;
+}
+"""
     ),
     SHELL(
         displayName = "Shell",
@@ -422,6 +501,29 @@ enum class IdeTheme(
     val errorColor: Color,
     val warningColor: Color
 ) {
+    CURSOR_DARK(
+        displayName = "Cursor Black (Default)",
+        isDark = true,
+        bg = Color(0xFF000000),
+        surface = Color(0xFF0D0E12),
+        surfaceHighlight = Color(0xFF161820),
+        editorBg = Color(0xFF000000),
+        gutterBg = Color(0xFF000000),
+        lineNumColor = Color(0xFF4A4E5E),
+        textPrimary = Color(0xFFECEFF4),
+        textSecondary = Color(0xFF8A90A2),
+        accent = Color(0xFF00E5FF),
+        keywordColor = Color(0xFF569CD6),
+        stringColor = Color(0xFF98C379),
+        commentColor = Color(0xFF676F82),
+        numberColor = Color(0xFFD19A66),
+        functionColor = Color(0xFF61AFEF),
+        typeColor = Color(0xFF4EC9B0),
+        terminalBg = Color(0xFF000000),
+        terminalFg = Color(0xFFECEFF4),
+        errorColor = Color(0xFFE06C75),
+        warningColor = Color(0xFFE5C07B)
+    ),
     VS_CODE_DARK(
         displayName = "VS Code Dark",
         isDark = true,

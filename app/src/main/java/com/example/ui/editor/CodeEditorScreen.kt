@@ -53,6 +53,17 @@ fun CodeEditorScreen(
     val showLineNumbers by viewModel.showLineNumbers.collectAsState()
     val problems by viewModel.problems.collectAsState()
 
+    // Cursor AI Editor State
+    val isCursorPromptOpen by viewModel.isCursorInlinePromptOpen.collectAsState()
+    val cursorPromptText by viewModel.cursorInlinePromptText.collectAsState()
+    val isCursorGenerating by viewModel.isCursorGenerating.collectAsState()
+    val cursorInlineDiff by viewModel.cursorInlineDiff.collectAsState()
+    val cursorGhostText by viewModel.cursorGhostText.collectAsState()
+
+    val cursorLine by viewModel.activeCursorLine.collectAsState()
+    val cursorCol by viewModel.activeCursorCol.collectAsState()
+    val cursorOffset by viewModel.activeCursorOffset.collectAsState()
+
     val editorFontFamily = when (fontFamilyName) {
         com.example.ui.theme.EditorFontOption.JETBRAINS_MONO.displayName -> com.example.ui.theme.JetBrainsMonoFontFamily
         com.example.ui.theme.EditorFontOption.FIRA_CODE.displayName -> com.example.ui.theme.FiraCodeFontFamily
@@ -92,9 +103,41 @@ fun CodeEditorScreen(
                     fontFamily = editorFontFamily,
                     showLineNumbers = showLineNumbers,
                     isWordWrap = isWordWrap,
+                    activeCursorOffset = cursorOffset,
                     onContentChange = { newContent -> viewModel.onEditorContentChange(newContent) },
+                    onCursorChanged = { text, offset -> viewModel.onEditorTextCursorChanged(text, offset) },
                     onZoom = { zoomFactor -> viewModel.adjustFontSizeByZoom(zoomFactor) }
                 )
+
+                // Live Cursor Inline Diff Overlay (Diff preview floating card right inside editor)
+                if (cursorInlineDiff != null) {
+                    CursorInlineDiffOverlay(
+                        diff = cursorInlineDiff!!,
+                        theme = theme,
+                        onAccept = { viewModel.acceptCursorInlineDiff() },
+                        onReject = { viewModel.rejectCursorInlineDiff() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 340.dp)
+                            .align(Alignment.TopCenter)
+                            .padding(8.dp)
+                    )
+                }
+
+                // Cursor Inline Cmd+K Prompt Bar
+                if (isCursorPromptOpen) {
+                    CursorInlinePromptBar(
+                        prompt = cursorPromptText,
+                        onPromptChange = { viewModel.cursorInlinePromptText.value = it },
+                        isGenerating = isCursorGenerating,
+                        theme = theme,
+                        onSubmit = { viewModel.submitCursorInlineEdit(it) },
+                        onClose = { viewModel.closeCursorInlinePrompt() },
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    )
+                }
             } else {
                 EmptyEditorPlaceholder(theme = theme, onNewFile = {
                     viewModel.activeModal.value = com.example.viewmodel.ActiveModal.NEW_FILE
@@ -113,16 +156,29 @@ fun CodeEditorScreen(
             )
         }
 
-        // 3. Mobile Coding Dual-Row Accessory Bar (Matching Screenshot)
+        // 3. Cursor Editor Status Bar (Ln, Col, Language, Spaces, UTF-8)
+        EditorStatusBar(
+            tab = activeTab,
+            cursorLine = cursorLine,
+            cursorCol = cursorCol,
+            fontSize = fontSizeVal,
+            isCursorGenerating = isCursorGenerating,
+            theme = theme
+        )
+
+        // 4. Mobile Coding Dual-Row Accessory Bar (with Cursor Copilot Ghost Text & ⌘K)
         if (activeTab != null) {
             val isWebLanguage = activeTab.language in listOf(Language.HTML, Language.CSS, Language.JAVASCRIPT, Language.TYPESCRIPT)
             DualRowAccessoryBar(
                 theme = theme,
                 isWebLanguage = isWebLanguage,
+                cursorGhostText = cursorGhostText,
+                onAcceptGhost = { viewModel.acceptCursorGhostText() },
+                onDismissGhost = { viewModel.dismissCursorGhostText() },
+                onToggleCursorCmdK = { viewModel.toggleCursorInlinePrompt() },
                 onRunFullScreenWeb = { viewModel.isFullScreenWebPreview.value = true },
                 onInsertText = { token ->
-                    val currentText = activeTab.content
-                    viewModel.onEditorContentChange(currentText + token)
+                    viewModel.insertTextAtCursor(token)
                 },
                 onUndo = { viewModel.undo() },
                 onRedo = { viewModel.redo() },
@@ -310,6 +366,79 @@ fun VerticalProblemsEdgeBadge(
 }
 
 @Composable
+fun EditorStatusBar(
+    tab: EditorTab?,
+    cursorLine: Int,
+    cursorCol: Int,
+    fontSize: Float,
+    isCursorGenerating: Boolean,
+    theme: IdeTheme
+) {
+    Surface(
+        color = theme.surface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(24.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Ln $cursorLine, Col $cursorCol",
+                    color = theme.accent,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                if (tab != null) {
+                    Text(
+                        text = "${tab.content.lines().size} lines",
+                        color = theme.textSecondary,
+                        fontSize = 10.sp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Spaces: 2",
+                        color = theme.textSecondary,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isCursorGenerating) {
+                    Text(
+                        text = "⚡ Cursor Generating...",
+                        color = theme.accent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = tab?.language?.displayName ?: "Plain Text",
+                    color = theme.textPrimary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "UTF-8",
+                    color = theme.textSecondary,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun EditorCanvas(
     tab: EditorTab,
     theme: IdeTheme,
@@ -317,7 +446,9 @@ fun EditorCanvas(
     fontFamily: FontFamily = FontFamily.Monospace,
     showLineNumbers: Boolean,
     isWordWrap: Boolean,
+    activeCursorOffset: Int = 0,
     onContentChange: (String) -> Unit,
+    onCursorChanged: (String, Int) -> Unit = { _, _ -> },
     onZoom: (Float) -> Unit = {}
 ) {
     var textFieldValue by remember(tab.id) {
@@ -326,7 +457,11 @@ fun EditorCanvas(
 
     LaunchedEffect(tab.content) {
         if (textFieldValue.text != tab.content) {
-            textFieldValue = textFieldValue.copy(text = tab.content)
+            val safePos = activeCursorOffset.coerceIn(0, tab.content.length)
+            textFieldValue = textFieldValue.copy(
+                text = tab.content,
+                selection = TextRange(safePos)
+            )
         }
     }
 
@@ -368,6 +503,8 @@ fun EditorCanvas(
 
     val verticalScroll = rememberScrollState()
     val horizontalScroll = rememberScrollState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val rowLineHeight = with(density) { (fontSize * 1.5f).sp.toDp() }
 
     Row(
         modifier = Modifier
@@ -398,7 +535,7 @@ fun EditorCanvas(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.End,
-                            modifier = Modifier.height((fontSize * 1.5f).dp)
+                            modifier = Modifier.height(rowLineHeight)
                         ) {
                             Text(
                                 text = "${lineIdx + 1}",
@@ -463,8 +600,12 @@ fun EditorCanvas(
             BasicTextField(
                 value = textFieldValue,
                 onValueChange = { newVal ->
+                    val isTextChanged = textFieldValue.text != newVal.text
                     textFieldValue = newVal
-                    onContentChange(newVal.text)
+                    if (isTextChanged) {
+                        onContentChange(newVal.text)
+                    }
+                    onCursorChanged(newVal.text, newVal.selection.start)
                 },
                 modifier = Modifier.fillMaxWidth().testTag("code_editor_input"),
                 textStyle = TextStyle(
@@ -709,6 +850,10 @@ fun detectCodeBlocks(lines: List<String>, language: Language): Map<Int, CodeFold
 fun DualRowAccessoryBar(
     theme: IdeTheme,
     isWebLanguage: Boolean = false,
+    cursorGhostText: String? = null,
+    onAcceptGhost: () -> Unit = {},
+    onDismissGhost: () -> Unit = {},
+    onToggleCursorCmdK: () -> Unit = {},
     onRunFullScreenWeb: () -> Unit = {},
     onInsertText: (String) -> Unit,
     onUndo: () -> Unit,
@@ -723,7 +868,64 @@ fun DualRowAccessoryBar(
             .background(theme.surface)
             .padding(vertical = 2.dp)
     ) {
-        // Quick Symbol Strip (Scrollable) with Prominent "✨ AI Codex Fix" and "🌐 Full Screen Web" buttons
+        // Cursor Copilot Inline Ghost-Text Pill (Accept with Tab)
+        if (cursorGhostText != null) {
+            Surface(
+                color = theme.bg,
+                shape = RoundedCornerShape(6.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, theme.accent),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .testTag("cursor_copilot_ghost_pill")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Copilot",
+                            tint = theme.accent,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Cursor: " + cursorGhostText.take(40),
+                            color = theme.textPrimary,
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            onClick = onAcceptGhost,
+                            color = theme.accent,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.height(22.dp)
+                        ) {
+                            Box(modifier = Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                                Text("Tab ⇥ Accept", color = theme.bg, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(onClick = onDismissGhost, modifier = Modifier.size(20.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = theme.textSecondary, modifier = Modifier.size(12.dp))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Quick Symbol Strip (Scrollable) with Prominent "✦ ⌘K Edit", "✨ AI Codex Fix" and "🌐 Full Screen Web" buttons
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -732,10 +934,41 @@ fun DualRowAccessoryBar(
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Cursor ⌘K Edit Button
+            Surface(
+                onClick = onToggleCursorCmdK,
+                color = theme.accent,
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier
+                    .height(28.dp)
+                    .testTag("accessory_cursor_cmdk_btn")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Cursor Cmd+K",
+                        tint = theme.bg,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "⌘K Edit",
+                        color = theme.bg,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
             // Codex AI Fix Button
             Surface(
                 onClick = onCodexAiFix,
-                color = theme.accent,
+                color = theme.surfaceHighlight,
                 shape = RoundedCornerShape(4.dp),
                 modifier = Modifier
                     .height(28.dp)
@@ -746,15 +979,15 @@ fun DualRowAccessoryBar(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.AutoAwesome,
+                        imageVector = Icons.Default.AutoFixHigh,
                         contentDescription = null,
-                        tint = theme.bg,
+                        tint = theme.accent,
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "AI Fix (Qwen)",
-                        color = theme.bg,
+                        text = "AI Fix",
+                        color = theme.textPrimary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -784,7 +1017,7 @@ fun DualRowAccessoryBar(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Full Screen Web",
+                            text = "Web Preview",
                             color = theme.bg,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -815,7 +1048,7 @@ fun DualRowAccessoryBar(
             }
         }
 
-        // Row 1 (Matches Screenshot): SHFT, ->| (Tab), Search, Undo, Redo, Up, Save, ESC
+        // Row 1 (Matches Screenshot): ⌘K, TAB, Search, Undo, Redo, Up, Save, ESC
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -824,8 +1057,15 @@ fun DualRowAccessoryBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            AccessoryTextButton(text = "SHFT", color = theme.textPrimary, onClick = {})
-            AccessoryIconButton(icon = Icons.Default.KeyboardTab, desc = "Tab", tint = theme.textPrimary, onClick = { onInsertText("    ") })
+            AccessoryTextButton(text = "⌘K", color = theme.accent, onClick = onToggleCursorCmdK)
+            AccessoryIconButton(
+                icon = Icons.Default.KeyboardTab,
+                desc = "Tab",
+                tint = if (cursorGhostText != null) theme.accent else theme.textPrimary,
+                onClick = {
+                    if (cursorGhostText != null) onAcceptGhost() else onInsertText("    ")
+                }
+            )
             AccessoryIconButton(icon = Icons.Default.Search, desc = "Search", tint = theme.textPrimary, onClick = onFind)
             AccessoryIconButton(icon = Icons.Default.Undo, desc = "Undo", tint = theme.textPrimary, onClick = onUndo)
             AccessoryIconButton(icon = Icons.Default.Redo, desc = "Redo", tint = theme.textPrimary, onClick = onRedo)
@@ -935,6 +1175,280 @@ fun EmptyEditorPlaceholder(
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text("Create File", color = theme.bg)
+        }
+    }
+}
+
+@Composable
+fun CursorInlinePromptBar(
+    prompt: String,
+    onPromptChange: (String) -> Unit,
+    isGenerating: Boolean,
+    theme: IdeTheme,
+    onSubmit: (String) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = theme.surface,
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, theme.accent),
+        shadowElevation = 8.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("cursor_inline_prompt_bar")
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            // Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Cursor AI",
+                        tint = theme.accent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Cursor AI  •  Cmd+K",
+                        color = theme.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = theme.textSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Input Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(theme.bg, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BasicTextField(
+                    value = prompt,
+                    onValueChange = onPromptChange,
+                    modifier = Modifier.weight(1f).testTag("cursor_inline_prompt_input"),
+                    textStyle = TextStyle(color = theme.textPrimary, fontSize = 13.sp),
+                    cursorBrush = SolidColor(theme.accent),
+                    decorationBox = { innerTextField ->
+                        if (prompt.isEmpty()) {
+                            Text(
+                                "Describe edit... (e.g. 'Add try-catch', 'Refactor')",
+                                color = theme.textSecondary.copy(alpha = 0.7f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                )
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Button(
+                    onClick = { onSubmit(prompt) },
+                    enabled = prompt.isNotBlank() && !isGenerating,
+                    colors = ButtonDefaults.buttonColors(containerColor = theme.accent),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text(
+                        if (isGenerating) "..." else "Edit",
+                        color = theme.bg,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (isGenerating) {
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth().height(2.dp),
+                    color = theme.accent,
+                    trackColor = theme.surfaceHighlight
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Quick Prompt Chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf(
+                    "✦ Add Error Handling" to "Add comprehensive try-catch and error logging",
+                    "✦ Optimize" to "Optimize code performance and memory allocation",
+                    "✦ Add Comments" to "Add clear documentation comments and docstrings",
+                    "✦ Fix Syntax" to "Fix any syntax errors and formatting",
+                    "✦ Add Tests" to "Generate unit test cases for this code"
+                ).forEach { (chipLabel, fullInstruction) ->
+                    Surface(
+                        onClick = {
+                            onPromptChange(fullInstruction)
+                            onSubmit(fullInstruction)
+                        },
+                        color = theme.surfaceHighlight,
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.padding(end = 6.dp).height(22.dp)
+                    ) {
+                        Box(modifier = Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                            Text(chipLabel, color = theme.textPrimary, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CursorInlineDiffOverlay(
+    diff: com.example.data.model.CodeDiff,
+    theme: IdeTheme,
+    onAccept: () -> Unit,
+    onReject: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = theme.bg.copy(alpha = 0.95f),
+        modifier = modifier
+            .testTag("cursor_inline_diff_overlay")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp)
+        ) {
+            // Header Bar
+            Surface(
+                color = theme.surface,
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, theme.accent),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = theme.accent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Cursor Diff (Lines ${diff.startLine}..${diff.endLine})",
+                            color = theme.textPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Button(
+                            onClick = onAccept,
+                            colors = ButtonDefaults.buttonColors(containerColor = theme.accent),
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp).testTag("cursor_accept_diff_btn")
+                        ) {
+                            Text("✓ Accept (Tab)", color = theme.bg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        OutlinedButton(
+                            onClick = onReject,
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp).testTag("cursor_reject_diff_btn")
+                        ) {
+                            Text("✕ Reject (Esc)", color = theme.textSecondary, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+
+            // Diff Scroll Area
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Red Original Snippet (Removed)
+                if (diff.originalSnippet.isNotBlank()) {
+                    Text(
+                        text = "Original Code",
+                        color = theme.errorColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                    Surface(
+                        color = Color(0x33FF5555),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp)) {
+                            diff.originalSnippet.lines().forEach { line ->
+                                Text(
+                                    text = "- $line",
+                                    color = Color(0xFFFF8B8B),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Green Replacement Snippet (Added)
+                Text(
+                    text = "Cursor Proposed Code",
+                    color = Color(0xFF50FA7B),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+                Surface(
+                    color = Color(0x3350FA7B),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        diff.replacementSnippet.lines().forEach { line ->
+                            Text(
+                                text = "+ $line",
+                                color = Color(0xFF8EFFB0),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

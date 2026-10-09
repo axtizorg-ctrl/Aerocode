@@ -43,6 +43,7 @@ data class WebConsoleLog(
 @Composable
 fun FullScreenWebScreen(
     viewModel: IdeViewModel,
+    theme: com.example.data.model.IdeTheme,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -67,12 +68,12 @@ fun FullScreenWebScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF141720))
+            .background(theme.bg)
             .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         // 1. Full Screen Browser Navigation Bar
         Surface(
-            color = Color(0xFF1C202C),
+            color = theme.surface,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
@@ -95,7 +96,7 @@ fun FullScreenWebScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back to Editor",
-                            tint = Color.White,
+                            tint = theme.textPrimary,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -104,7 +105,7 @@ fun FullScreenWebScreen(
 
                     // Address / Title Bar Pill
                     Surface(
-                        color = Color(0xFF12141C),
+                        color = theme.surfaceHighlight,
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
@@ -117,13 +118,13 @@ fun FullScreenWebScreen(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = Color(0xFFA6E3A1),
+                                tint = theme.stringColor,
                                 modifier = Modifier.size(12.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "localhost:8080/${activeTab?.title ?: "Index.html"}",
-                                color = Color(0xFFCDD6F4),
+                                text = "localhost:8080/${activeTab?.title ?: "index.html"}",
+                                color = theme.textPrimary,
                                 fontSize = 11.sp,
                                 maxLines = 1
                             )
@@ -140,11 +141,11 @@ fun FullScreenWebScreen(
                         onClick = { isConsoleOpen = !isConsoleOpen },
                         modifier = Modifier.size(36.dp).testTag("web_preview_console_button")
                     ) {
-                        BadgeBox(badgeCount = consoleLogs.size) {
+                        BadgeBox(badgeCount = consoleLogs.size, badgeColor = theme.accent, textColor = theme.bg) {
                             Icon(
                                 imageVector = Icons.Default.Terminal,
                                 contentDescription = "Console Logs",
-                                tint = if (isConsoleOpen) Color(0xFFCBA6F7) else Color(0xFFCDD6F4),
+                                tint = if (isConsoleOpen) theme.accent else theme.textSecondary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -166,7 +167,7 @@ fun FullScreenWebScreen(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Reload",
-                            tint = Color(0xFFCDD6F4),
+                            tint = theme.textSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -243,7 +244,7 @@ fun FullScreenWebScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
-                    .background(Color(0xFF141720))
+                    .background(theme.surface)
                     .padding(8.dp)
             ) {
                 Row(
@@ -253,7 +254,7 @@ fun FullScreenWebScreen(
                 ) {
                     Text(
                         text = "CONSOLE OUTPUT (${consoleLogs.size})",
-                        color = Color(0xFF89B4FA),
+                        color = theme.accent,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -261,7 +262,7 @@ fun FullScreenWebScreen(
                         onClick = { consoleLogs.clear() },
                         modifier = Modifier.height(26.dp)
                     ) {
-                        Text("Clear", color = Color(0xFF7A8092), fontSize = 10.sp)
+                        Text("Clear", color = theme.textSecondary, fontSize = 10.sp)
                     }
                 }
 
@@ -272,7 +273,7 @@ fun FullScreenWebScreen(
                     ) {
                         Text(
                             text = "No console logs emitted yet.",
-                            color = Color(0xFF5D6477),
+                            color = theme.textSecondary,
                             fontSize = 11.sp
                         )
                     }
@@ -280,9 +281,9 @@ fun FullScreenWebScreen(
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         items(consoleLogs) { log ->
                             val textColor = when (log.level) {
-                                ConsoleMessage.MessageLevel.ERROR -> Color(0xFFF38BA8)
-                                ConsoleMessage.MessageLevel.WARNING -> Color(0xFFFAB387)
-                                else -> Color(0xFFA6E3A1)
+                                ConsoleMessage.MessageLevel.ERROR -> theme.errorColor
+                                ConsoleMessage.MessageLevel.WARNING -> theme.warningColor
+                                else -> theme.stringColor
                             }
                             Text(
                                 text = "> ${log.message} (line ${log.lineNumber})",
@@ -299,12 +300,12 @@ fun FullScreenWebScreen(
 }
 
 @Composable
-fun BadgeBox(badgeCount: Int, content: @Composable () -> Unit) {
+fun BadgeBox(badgeCount: Int, badgeColor: Color, textColor: Color, content: @Composable () -> Unit) {
     Box {
         content()
         if (badgeCount > 0) {
             Surface(
-                color = Color(0xFFCBA6F7),
+                color = badgeColor,
                 shape = RoundedCornerShape(6.dp),
                 modifier = Modifier
                     .size(14.dp)
@@ -313,7 +314,7 @@ fun BadgeBox(badgeCount: Int, content: @Composable () -> Unit) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = if (badgeCount > 9) "9+" else "$badgeCount",
-                        color = Color(0xFF11111B),
+                        color = textColor,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -347,12 +348,12 @@ private fun buildCombinedHtml(projectDir: File, activeContent: String?, activePa
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AeroCode Web Preview</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #12121e; color: #fff; padding: 24px; text-align: center; }
-    .card { background: #1e1e2e; border: 1px solid #313244; padding: 24px; border-radius: 12px; max-width: 480px; margin: 30px auto; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
-    h1 { color: #89b4fa; margin-bottom: 8px; font-size: 22px; }
-    p { color: #a6adc8; font-size: 14px; line-height: 1.5; }
-    #app-output { margin-top: 16px; padding: 12px; background: #11111b; border-radius: 8px; font-family: monospace; color: #a6e3a1; text-align: left; }
-    button { background: #cba6f7; color: #11111b; border: none; padding: 10px 18px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 12px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #000000; color: #fff; padding: 24px; text-align: center; }
+    .card { background: #0e0f14; border: 1px solid #1c1e28; padding: 24px; border-radius: 12px; max-width: 480px; margin: 30px auto; box-shadow: 0 8px 30px rgba(0,0,0,0.8); }
+    h1 { color: #00e5ff; margin-bottom: 8px; font-size: 22px; }
+    p { color: #8a90a2; font-size: 14px; line-height: 1.5; }
+    #app-output { margin-top: 16px; padding: 12px; background: #050508; border-radius: 8px; font-family: monospace; color: #50fa7b; text-align: left; border: 1px solid #1a1c24; }
+    button { background: #00e5ff; color: #000000; border: none; padding: 10px 18px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 12px; }
   </style>
 </head>
 <body>

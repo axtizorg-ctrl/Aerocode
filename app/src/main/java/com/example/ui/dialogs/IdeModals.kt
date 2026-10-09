@@ -965,35 +965,211 @@ fun NewProjectModal(viewModel: IdeViewModel, theme: IdeTheme) {
     )
 }
 
+data class FrontendFileTemplate(
+    val name: String,
+    val defaultFileName: String,
+    val badge: String,
+    val description: String,
+    val content: String
+)
+
 @Composable
 fun NewFileModal(viewModel: IdeViewModel, theme: IdeTheme) {
-    var fileName by remember { mutableStateOf("") }
+    val templates = remember {
+        listOf(
+            FrontendFileTemplate(
+                name = "HTML5 Page",
+                defaultFileName = "index.html",
+                badge = "HTML",
+                description = "Semantic HTML5 layout with stylesheet, viewport, and script tags",
+                content = Language.HTML.sampleBoilerplate
+            ),
+            FrontendFileTemplate(
+                name = "CSS Stylesheet",
+                defaultFileName = "style.css",
+                badge = "CSS",
+                description = "Modern CSS variables, flexbox/grid layout, and responsive reset",
+                content = Language.CSS.sampleBoilerplate
+            ),
+            FrontendFileTemplate(
+                name = "JavaScript Module",
+                defaultFileName = "app.js",
+                badge = "JS",
+                description = "Modern DOM event listeners, interactive state, and console logging",
+                content = Language.JAVASCRIPT.sampleBoilerplate
+            ),
+            FrontendFileTemplate(
+                name = "React JSX",
+                defaultFileName = "Component.jsx",
+                badge = "JSX",
+                description = "Functional component with state, effects, and modern JSX markup",
+                content = """// React Functional Component
+export default function Component() {
+    const [active, setActive] = React.useState(false);
+
+    return (
+        <div className="component-card">
+            <h3>⚡ React Component</h3>
+            <p>Status: {active ? "Active" : "Idle"}</p>
+            <button onClick={() => setActive(!active)}>
+                Toggle State
+            </button>
+        </div>
+    );
+}
+"""
+            ),
+            FrontendFileTemplate(
+                name = "TypeScript",
+                defaultFileName = "main.ts",
+                badge = "TS",
+                description = "Strict typing interfaces, async utilities, and exported functions",
+                content = Language.TYPESCRIPT.sampleBoilerplate
+            ),
+            FrontendFileTemplate(
+                name = "JSON Config",
+                defaultFileName = "data.json",
+                badge = "JSON",
+                description = "Structured JSON data with mock API payload",
+                content = """{
+  "name": "aero-frontend",
+  "version": "1.0.0",
+  "author": "Developer",
+  "config": {
+    "theme": "dark",
+    "features": ["preview", "console", "cursor-ai"]
+  }
+}
+"""
+            ),
+            FrontendFileTemplate(
+                name = "Markdown Docs",
+                defaultFileName = "README.md",
+                badge = "MD",
+                description = "Project documentation with quick-start and preview guides",
+                content = """# 🚀 Frontend Project
+
+This web app runs in the AeroCode Mobile IDE with live browser execution.
+
+## Files
+- `index.html`: Web structure & DOM elements
+- `style.css`: Visual presentation & theme
+- `app.js`: Logic, event handlers & console output
+"""
+            ),
+            FrontendFileTemplate(
+                name = "Empty File",
+                defaultFileName = "script.js",
+                badge = "EMPTY",
+                description = "Blank text buffer with no boilerplate",
+                content = ""
+            )
+        )
+    }
+
+    var selectedTemplateIndex by remember { mutableStateOf(0) }
+    var fileName by remember { mutableStateOf("index.html") }
 
     AlertDialog(
         onDismissRequest = { viewModel.activeModal.value = ActiveModal.NONE },
         containerColor = theme.surface,
-        title = { Text("New File", color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.NoteAdd, contentDescription = null, tint = theme.accent, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add File to Project", color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        },
         text = {
-            OutlinedTextField(
-                value = fileName,
-                onValueChange = { fileName = it },
-                label = { Text("File Name (e.g. utils.cpp, test.py)", color = theme.textSecondary) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().testTag("new_file_name_input"),
-                textStyle = LocalTextStyle.current.copy(color = theme.textPrimary)
-            )
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = "Adds a single template file to '${viewModel.currentProjectName.collectAsState().value}'. Does not create another project.",
+                    color = theme.textSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("File Name", color = theme.textSecondary) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("new_file_name_input"),
+                    textStyle = LocalTextStyle.current.copy(color = theme.textPrimary)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("CHOOSE FRONTEND TEMPLATE", color = theme.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                templates.forEachIndexed { index, tmpl ->
+                    val isSelected = selectedTemplateIndex == index
+                    Surface(
+                        onClick = {
+                            selectedTemplateIndex = index
+                            fileName = tmpl.defaultFileName
+                        },
+                        color = if (isSelected) theme.surfaceHighlight else theme.surface,
+                        shape = RoundedCornerShape(8.dp),
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, theme.accent) else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                color = if (isSelected) theme.accent else theme.surfaceHighlight,
+                                shape = RoundedCornerShape(4.dp),
+                                modifier = Modifier.height(20.dp)
+                            ) {
+                                Box(modifier = Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = tmpl.badge,
+                                        color = if (isSelected) theme.bg else theme.textSecondary,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = tmpl.name,
+                                    color = if (isSelected) theme.accent else theme.textPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = tmpl.description,
+                                    color = theme.textSecondary,
+                                    fontSize = 10.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         },
         confirmButton = {
             Button(
                 onClick = {
                     if (fileName.isNotBlank()) {
-                        viewModel.createNewFileInProject(fileName)
+                        val chosenContent = templates.getOrNull(selectedTemplateIndex)?.content ?: ""
+                        viewModel.createNewFileInProject(fileName.trim(), chosenContent)
                     }
                     viewModel.activeModal.value = ActiveModal.NONE
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = theme.accent)
             ) {
-                Text("Create", color = theme.bg)
+                Text("Create File", color = theme.bg, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -1003,3 +1179,4 @@ fun NewFileModal(viewModel: IdeViewModel, theme: IdeTheme) {
         }
     )
 }
+
