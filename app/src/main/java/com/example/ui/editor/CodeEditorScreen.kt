@@ -104,6 +104,7 @@ fun CodeEditorScreen(
             // Right-edge Vertical "⚠️ Problems" Banner (Matches Screenshot)
             VerticalProblemsEdgeBadge(
                 problemCount = problems.size,
+                theme = theme,
                 onClick = {
                     viewModel.activeDockTab.value = BottomDockTab.PROBLEMS
                     viewModel.isBottomDockExpanded.value = true
@@ -146,13 +147,13 @@ fun EditorTabsRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(44.dp)
-            .background(Color(0xFF161922))
+            .background(theme.surface)
             .horizontalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically
     ) {
         tabs.forEach { tab ->
             val isActive = tab.id == activeTabId
-            val tabBg = if (isActive) Color(0xFF1E222D) else Color(0xFF141720)
+            val tabBg = if (isActive) theme.editorBg else theme.surface
 
             val (badgeLabel, badgeBg, badgeFg) = when (tab.language) {
                 Language.JAVASCRIPT -> Triple("JS", Color(0xFFF7DF1E), Color(0xFF111111))
@@ -199,7 +200,7 @@ fun EditorTabsRow(
 
                     Text(
                         text = tab.title,
-                        color = if (isActive) Color.White else Color(0xFF9EA3B0),
+                        color = if (isActive) theme.textPrimary else theme.textSecondary,
                         fontSize = 13.sp,
                         fontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal
                     )
@@ -210,7 +211,7 @@ fun EditorTabsRow(
                         Box(
                             modifier = Modifier
                                 .size(5.dp)
-                                .background(Color(0xFF89B4FA), RoundedCornerShape(3.dp))
+                                .background(theme.accent, RoundedCornerShape(3.dp))
                         )
                     }
 
@@ -225,7 +226,7 @@ fun EditorTabsRow(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close tab",
-                            tint = Color(0xFF7A8092),
+                            tint = theme.textSecondary,
                             modifier = Modifier.size(12.dp)
                         )
                     }
@@ -237,7 +238,7 @@ fun EditorTabsRow(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(2.5.dp)
-                            .background(Color(0xFF388BFD))
+                            .background(theme.accent)
                             .align(Alignment.BottomCenter)
                     )
                 }
@@ -247,7 +248,7 @@ fun EditorTabsRow(
                 modifier = Modifier
                     .width(1.dp)
                     .fillMaxHeight()
-                    .background(Color(0xFF222634))
+                    .background(theme.surfaceHighlight)
             )
         }
 
@@ -261,7 +262,7 @@ fun EditorTabsRow(
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = "New Tab",
-                tint = Color(0xFF7A8092),
+                tint = theme.textSecondary,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -271,12 +272,13 @@ fun EditorTabsRow(
 @Composable
 fun VerticalProblemsEdgeBadge(
     problemCount: Int,
+    theme: IdeTheme,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
         onClick = onClick,
-        color = Color(0xFFE51400),
+        color = theme.errorColor,
         shape = RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp),
         modifier = modifier
             .padding(top = 16.dp)
@@ -292,13 +294,13 @@ fun VerticalProblemsEdgeBadge(
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = theme.bg,
                     modifier = Modifier.size(13.dp)
                 )
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     text = if (problemCount > 0) "Problems ($problemCount)" else "Problems",
-                    color = Color.White,
+                    color = theme.bg,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -383,7 +385,7 @@ fun EditorCanvas(
         if (showLineNumbers) {
             Column(
                 modifier = Modifier
-                    .background(Color(0xFF141720))
+                    .background(theme.gutterBg)
                     .padding(vertical = 12.dp, horizontal = 4.dp)
                     .widthIn(min = 48.dp),
                 horizontalAlignment = Alignment.End
@@ -400,7 +402,7 @@ fun EditorCanvas(
                         ) {
                             Text(
                                 text = "${lineIdx + 1}",
-                                color = if (lineIdx == activeLineIdx) Color.White else Color(0xFF5D6477),
+                                color = if (lineIdx == activeLineIdx) theme.accent else theme.lineNumColor,
                                 fontSize = fontSize.sp,
                                 fontFamily = fontFamily,
                                 fontWeight = if (lineIdx == activeLineIdx) FontWeight.Bold else FontWeight.Normal
@@ -425,7 +427,7 @@ fun EditorCanvas(
                                 ) {
                                     Text(
                                         text = if (isFolded) "▶" else "▼",
-                                        color = if (isFolded) Color(0xFFCBA6F7) else Color(0xFF89B4FA),
+                                        color = if (isFolded) theme.accent else theme.functionColor,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -441,7 +443,7 @@ fun EditorCanvas(
                 modifier = Modifier
                     .width(1.dp)
                     .fillMaxHeight()
-                    .background(Color(0xFF222634))
+                    .background(theme.surfaceHighlight)
             )
         }
 
@@ -466,12 +468,12 @@ fun EditorCanvas(
                 },
                 modifier = Modifier.fillMaxWidth().testTag("code_editor_input"),
                 textStyle = TextStyle(
-                    color = Color(0xFFDCDFE4),
+                    color = theme.textPrimary,
                     fontSize = fontSize.sp,
                     fontFamily = fontFamily,
                     lineHeight = (fontSize * 1.5f).sp
                 ),
-                cursorBrush = SolidColor(Color(0xFF388BFD)),
+                cursorBrush = SolidColor(theme.accent),
                 visualTransformation = remember(textFieldValue.text, foldedStarts, codeBlocks, tab.language, theme) {
                     createFoldVisualTransformation(
                         originalText = textFieldValue.text,
@@ -718,7 +720,7 @@ fun DualRowAccessoryBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF141720))
+            .background(theme.surface)
             .padding(vertical = 2.dp)
     ) {
         // Quick Symbol Strip (Scrollable) with Prominent "✨ AI Codex Fix" and "🌐 Full Screen Web" buttons
@@ -733,7 +735,7 @@ fun DualRowAccessoryBar(
             // Codex AI Fix Button
             Surface(
                 onClick = onCodexAiFix,
-                color = Color(0xFFCBA6F7),
+                color = theme.accent,
                 shape = RoundedCornerShape(4.dp),
                 modifier = Modifier
                     .height(28.dp)
@@ -746,13 +748,13 @@ fun DualRowAccessoryBar(
                     Icon(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        tint = Color(0xFF11111B),
+                        tint = theme.bg,
                         modifier = Modifier.size(13.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "AI Fix (Qwen)",
-                        color = Color(0xFF11111B),
+                        color = theme.bg,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -764,7 +766,7 @@ fun DualRowAccessoryBar(
                 Spacer(modifier = Modifier.width(4.dp))
                 Surface(
                     onClick = onRunFullScreenWeb,
-                    color = Color(0xFFA6E3A1),
+                    color = theme.functionColor,
                     shape = RoundedCornerShape(4.dp),
                     modifier = Modifier
                         .height(28.dp)
@@ -777,13 +779,13 @@ fun DualRowAccessoryBar(
                         Icon(
                             imageVector = Icons.Default.Language,
                             contentDescription = null,
-                            tint = Color(0xFF11111B),
+                            tint = theme.bg,
                             modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Full Screen Web",
-                            color = Color(0xFF11111B),
+                            color = theme.bg,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -800,14 +802,14 @@ fun DualRowAccessoryBar(
                 val label = if (token == "    ") "TAB" else token
                 Surface(
                     onClick = { onInsertText(token) },
-                    color = Color(0xFF1F2432),
+                    color = theme.surfaceHighlight,
                     shape = RoundedCornerShape(4.dp),
                     modifier = Modifier
                         .padding(horizontal = 2.dp)
                         .height(26.dp)
                 ) {
                     Box(modifier = Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-                        Text(label, color = Color.White, fontSize = 11.sp)
+                        Text(label, color = theme.textPrimary, fontSize = 11.sp)
                     }
                 }
             }
@@ -822,14 +824,14 @@ fun DualRowAccessoryBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            AccessoryTextButton(text = "SHFT", onClick = {})
-            AccessoryIconButton(icon = Icons.Default.KeyboardTab, desc = "Tab", onClick = { onInsertText("    ") })
-            AccessoryIconButton(icon = Icons.Default.Search, desc = "Search", onClick = onFind)
-            AccessoryIconButton(icon = Icons.Default.Undo, desc = "Undo", onClick = onUndo)
-            AccessoryIconButton(icon = Icons.Default.Redo, desc = "Redo", onClick = onRedo)
-            AccessoryIconButton(icon = Icons.Default.KeyboardArrowUp, desc = "Up", onClick = {})
-            AccessoryIconButton(icon = Icons.Default.Save, desc = "Save", onClick = onSave)
-            AccessoryTextButton(text = "ESC", onClick = {})
+            AccessoryTextButton(text = "SHFT", color = theme.textPrimary, onClick = {})
+            AccessoryIconButton(icon = Icons.Default.KeyboardTab, desc = "Tab", tint = theme.textPrimary, onClick = { onInsertText("    ") })
+            AccessoryIconButton(icon = Icons.Default.Search, desc = "Search", tint = theme.textPrimary, onClick = onFind)
+            AccessoryIconButton(icon = Icons.Default.Undo, desc = "Undo", tint = theme.textPrimary, onClick = onUndo)
+            AccessoryIconButton(icon = Icons.Default.Redo, desc = "Redo", tint = theme.textPrimary, onClick = onRedo)
+            AccessoryIconButton(icon = Icons.Default.KeyboardArrowUp, desc = "Up", tint = theme.textPrimary, onClick = {})
+            AccessoryIconButton(icon = Icons.Default.Save, desc = "Save", tint = theme.textPrimary, onClick = onSave)
+            AccessoryTextButton(text = "ESC", color = theme.textPrimary, onClick = {})
         }
 
         // Row 2 (Matches Screenshot): CTRL, ALT, |< (Home), >| (End), Left, Down, Right, |c
@@ -841,20 +843,24 @@ fun DualRowAccessoryBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            AccessoryTextButton(text = "CTRL", onClick = {})
-            AccessoryTextButton(text = "ALT", onClick = {})
-            AccessoryTextButton(text = "⇃M", onClick = {})
-            AccessoryTextButton(text = "⇂M", onClick = {})
-            AccessoryIconButton(icon = Icons.Default.KeyboardArrowLeft, desc = "Left", onClick = {})
-            AccessoryIconButton(icon = Icons.Default.KeyboardArrowDown, desc = "Down", onClick = {})
-            AccessoryIconButton(icon = Icons.Default.KeyboardArrowRight, desc = "Right", onClick = {})
-            AccessoryTextButton(text = "⇂C", onClick = { onInsertText("{};") })
+            AccessoryTextButton(text = "CTRL", color = theme.textPrimary, onClick = {})
+            AccessoryTextButton(text = "ALT", color = theme.textPrimary, onClick = {})
+            AccessoryTextButton(text = "⇃M", color = theme.textPrimary, onClick = {})
+            AccessoryTextButton(text = "⇂M", color = theme.textPrimary, onClick = {})
+            AccessoryIconButton(icon = Icons.Default.KeyboardArrowLeft, desc = "Left", tint = theme.textPrimary, onClick = {})
+            AccessoryIconButton(icon = Icons.Default.KeyboardArrowDown, desc = "Down", tint = theme.textPrimary, onClick = {})
+            AccessoryIconButton(icon = Icons.Default.KeyboardArrowRight, desc = "Right", tint = theme.textPrimary, onClick = {})
+            AccessoryTextButton(text = "⇂C", color = theme.textPrimary, onClick = { onInsertText("{};") })
         }
     }
 }
 
 @Composable
-fun AccessoryTextButton(text: String, onClick: () -> Unit) {
+fun AccessoryTextButton(
+    text: String,
+    color: Color = Color.White,
+    onClick: () -> Unit
+) {
     Surface(
         onClick = onClick,
         color = Color.Transparent,
@@ -863,7 +869,7 @@ fun AccessoryTextButton(text: String, onClick: () -> Unit) {
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text = text,
-                color = Color(0xFFDCDFE4),
+                color = color,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -875,6 +881,7 @@ fun AccessoryTextButton(text: String, onClick: () -> Unit) {
 fun AccessoryIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     desc: String,
+    tint: Color = Color.White,
     onClick: () -> Unit
 ) {
     IconButton(
@@ -884,7 +891,7 @@ fun AccessoryIconButton(
         Icon(
             imageVector = icon,
             contentDescription = desc,
-            tint = Color(0xFFDCDFE4),
+            tint = tint,
             modifier = Modifier.size(18.dp)
         )
     }

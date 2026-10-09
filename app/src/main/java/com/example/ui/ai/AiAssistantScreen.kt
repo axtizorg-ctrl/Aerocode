@@ -68,7 +68,7 @@ fun AiAssistantScreen(
                 Box(
                     modifier = Modifier
                         .size(8.dp)
-                        .background(if (viewModel.aiRepo.isOllamaEnabled) Color(0xFFA6E3A1) else theme.functionColor, RoundedCornerShape(4.dp))
+                        .background(if (viewModel.aiRepo.isOllamaEnabled) theme.stringColor else theme.functionColor, RoundedCornerShape(4.dp))
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -95,7 +95,7 @@ fun AiAssistantScreen(
                 // Codex Auto Fix shortcut
                 Surface(
                     onClick = { viewModel.triggerCodexAiAutoFix() },
-                    color = Color(0xFFCBA6F7),
+                    color = theme.accent,
                     shape = RoundedCornerShape(4.dp),
                     modifier = Modifier.height(26.dp)
                 ) {
@@ -106,13 +106,13 @@ fun AiAssistantScreen(
                         Icon(
                             Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = Color(0xFF11111B),
+                            tint = theme.bg,
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             "Codex Fix",
-                            color = Color(0xFF11111B),
+                            color = theme.bg,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )

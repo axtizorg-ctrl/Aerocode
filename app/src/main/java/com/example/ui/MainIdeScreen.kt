@@ -144,7 +144,8 @@ fun MainIdeScreen(
                         if (isBottomDockExpanded) {
                             TerminalResizeHandle(
                                 heightFraction = terminalHeightFraction,
-                                onHeightFractionChange = { viewModel.terminalHeightFraction.value = it }
+                                onHeightFractionChange = { viewModel.terminalHeightFraction.value = it },
+                                theme = theme
                             )
                         }
 
@@ -199,7 +200,7 @@ fun MobileIdeTopBar(
     onSettingsClick: () -> Unit
 ) {
     Surface(
-        color = androidx.compose.ui.graphics.Color(0xFF141720),
+        color = theme.surface,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -222,7 +223,7 @@ fun MobileIdeTopBar(
                     Icon(
                         imageVector = Icons.Default.Menu,
                         contentDescription = "Explorer Drawer",
-                        tint = androidx.compose.ui.graphics.Color.White,
+                        tint = theme.textPrimary,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -232,14 +233,14 @@ fun MobileIdeTopBar(
                 Column {
                     Text(
                         text = title,
-                        color = androidx.compose.ui.graphics.Color.White,
+                        color = theme.textPrimary,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
                     )
                     Text(
                         text = subtitle,
-                        color = androidx.compose.ui.graphics.Color(0xFF7A8092),
+                        color = theme.textSecondary,
                         fontSize = 11.sp,
                         maxLines = 1
                     )
@@ -256,7 +257,7 @@ fun MobileIdeTopBar(
                     Icon(
                         imageVector = Icons.Default.Edit,
                         contentDescription = "Edit / New File",
-                        tint = androidx.compose.ui.graphics.Color(0xFFDCDFE4),
+                        tint = theme.textSecondary,
                         modifier = Modifier.size(19.dp)
                     )
                 }
@@ -264,7 +265,7 @@ fun MobileIdeTopBar(
                 // AI Codex Fix Button (Requested by user)
                 Surface(
                     onClick = onCodexAiClick,
-                    color = androidx.compose.ui.graphics.Color(0xFFCBA6F7),
+                    color = theme.accent,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .height(30.dp)
@@ -278,13 +279,13 @@ fun MobileIdeTopBar(
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = "AI Fix",
-                            tint = androidx.compose.ui.graphics.Color(0xFF11111B),
+                            tint = theme.bg,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = "AI Fix",
-                            color = androidx.compose.ui.graphics.Color(0xFF11111B),
+                            color = theme.bg,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -301,7 +302,7 @@ fun MobileIdeTopBar(
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Run",
-                        tint = androidx.compose.ui.graphics.Color(0xFFDCDFE4),
+                        tint = theme.functionColor,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -314,7 +315,7 @@ fun MobileIdeTopBar(
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "More",
-                        tint = androidx.compose.ui.graphics.Color(0xFFDCDFE4),
+                        tint = theme.textSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -450,14 +451,14 @@ fun TabletLandscapeLayout(
                     // Codex AI Fix Button
                     Button(
                         onClick = { viewModel.triggerCodexAiAutoFix() },
-                        colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFFCBA6F7)),
+                        colors = ButtonDefaults.buttonColors(containerColor = theme.accent),
                         shape = RoundedCornerShape(6.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                         modifier = Modifier.height(30.dp)
                     ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = androidx.compose.ui.graphics.Color(0xFF11111B), modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = theme.bg, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("AI Fix (Qwen)", color = androidx.compose.ui.graphics.Color(0xFF11111B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("AI Fix (Qwen)", color = theme.bg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(modifier = Modifier.width(6.dp))
@@ -507,7 +508,8 @@ fun TabletLandscapeLayout(
 
                 TerminalResizeHandle(
                     heightFraction = tabletTerminalFraction,
-                    onHeightFractionChange = { viewModel.terminalHeightFraction.value = it }
+                    onHeightFractionChange = { viewModel.terminalHeightFraction.value = it },
+                    theme = theme
                 )
 
                 TerminalScreen(
@@ -531,10 +533,11 @@ fun TabletLandscapeLayout(
 fun TerminalResizeHandle(
     heightFraction: Float,
     onHeightFractionChange: (Float) -> Unit,
+    theme: IdeTheme,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = Color(0xFF141720),
+        color = theme.surface,
         modifier = modifier
             .fillMaxWidth()
             .height(26.dp)
@@ -558,7 +561,7 @@ fun TerminalResizeHandle(
         ) {
             Text(
                 text = "Height: ${(heightFraction * 100).toInt()}%",
-                color = Color(0xFF7A8092),
+                color = theme.textSecondary,
                 fontSize = 10.sp
             )
 
@@ -567,24 +570,24 @@ fun TerminalResizeHandle(
                 modifier = Modifier
                     .width(42.dp)
                     .height(4.dp)
-                    .background(Color(0xFF5D6477), RoundedCornerShape(2.dp))
+                    .background(theme.surfaceHighlight, RoundedCornerShape(2.dp))
             )
 
             // Quick Preset Buttons
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ResizePresetChip(label = "30%", isSelected = heightFraction in 0.25f..0.35f) {
+                ResizePresetChip(label = "30%", isSelected = heightFraction in 0.25f..0.35f, theme = theme) {
                     onHeightFractionChange(0.30f)
                 }
                 Spacer(modifier = Modifier.width(3.dp))
-                ResizePresetChip(label = "50%", isSelected = heightFraction in 0.45f..0.55f) {
+                ResizePresetChip(label = "50%", isSelected = heightFraction in 0.45f..0.55f, theme = theme) {
                     onHeightFractionChange(0.50f)
                 }
                 Spacer(modifier = Modifier.width(3.dp))
-                ResizePresetChip(label = "75%", isSelected = heightFraction in 0.70f..0.80f) {
+                ResizePresetChip(label = "75%", isSelected = heightFraction in 0.70f..0.80f, theme = theme) {
                     onHeightFractionChange(0.75f)
                 }
                 Spacer(modifier = Modifier.width(3.dp))
-                ResizePresetChip(label = "Max", isSelected = heightFraction > 0.80f) {
+                ResizePresetChip(label = "Max", isSelected = heightFraction > 0.80f, theme = theme) {
                     onHeightFractionChange(0.85f)
                 }
             }
@@ -596,11 +599,12 @@ fun TerminalResizeHandle(
 fun ResizePresetChip(
     label: String,
     isSelected: Boolean,
+    theme: IdeTheme,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
-        color = if (isSelected) Color(0xFF388BFD) else Color(0xFF222634),
+        color = if (isSelected) theme.accent else theme.surfaceHighlight,
         shape = RoundedCornerShape(3.dp),
         modifier = Modifier.height(18.dp)
     ) {
@@ -610,7 +614,7 @@ fun ResizePresetChip(
         ) {
             Text(
                 text = label,
-                color = if (isSelected) Color.White else Color(0xFFCDD6F4),
+                color = if (isSelected) theme.bg else theme.textPrimary,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold
             )
