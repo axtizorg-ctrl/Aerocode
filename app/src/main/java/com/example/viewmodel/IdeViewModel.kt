@@ -22,6 +22,8 @@ import com.example.data.repository.GitRepository
 import com.example.data.repository.PluginRepository
 import com.example.data.repository.ProjectRepository
 import com.example.data.repository.TermuxRepository
+import com.example.data.repository.TermuxEnvironmentDiagnostics
+import com.example.data.repository.TermuxCommandResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -606,15 +608,51 @@ class IdeViewModel(application: Application) : AndroidViewModel(application) {
         activeTerminalSessionId.value = newSession.id
     }
 
-    // Termux State
+    // Termux State & Diagnostics
     val isCloningTermux = MutableStateFlow(false)
     val termuxCloneResult = MutableStateFlow<String?>(null)
+    val termuxDiagnostics = MutableStateFlow<TermuxEnvironmentDiagnostics?>(null)
+    val isRunningBridgeTest = MutableStateFlow(false)
+    val termuxBridgeTestResult = MutableStateFlow<TermuxCommandResult?>(null)
     val ollamaStatusMessage = MutableStateFlow("Ollama: Disabled (Local Qwen 0.5B Active)")
 
     fun refreshTermuxState() {
         viewModelScope.launch {
             isTermuxInstalled.value = termuxRepo.isTermuxInstalled()
             _termuxTools.value = termuxRepo.scanTermuxEnvironment()
+            val projDir = projectRepo.getProjectDirectory(_currentProjectName.value)
+            termuxDiagnostics.value = termuxRepo.performDiagnostics(projDir)
+        }
+    }
+
+    fun runTermuxBridgeTest() {
+        viewModelScope.launch {
+            isRunningBridgeTest.value = true
+            val projDir = projectRepo.getProjectDirectory(_currentProjectName.value)
+            
+            val session = _terminalSessions.value.firstOrNull { it.id == activeTerminalSessionId.value }
+                ?: _terminalSessions.value.first()
+            
+            appendTerminalLine(session.id, TerminalLine(text = "[Bridge Test] Initiating harmless Termux bridge verification...", type = TerminalLineType.SYSTEM))
+            
+            val result = termuxRepo.runBridgeTestCommand(projDir)
+            termuxBridgeTestResult.value = result
+            
+            if (result.stdout.isNotEmpty()) {
+                appendTerminalLine(session.id, TerminalLine(text = result.stdout, type = TerminalLineType.STDOUT))
+            }
+            if (result.stderr.isNotEmpty()) {
+                appendTerminalLine(session.id, TerminalLine(text = result.stderr, type = TerminalLineType.STDERR))
+            }
+            
+            if (result.isSuccess) {
+                appendTerminalLine(session.id, TerminalLine(text = "[Bridge Test SUCCESS] Exit code: ${result.exitCode} (${result.durationMs}ms)", type = TerminalLineType.SUCCESS))
+            } else {
+                appendTerminalLine(session.id, TerminalLine(text = "[Bridge Test FAILED] ${result.errmsg ?: "Exit code ${result.exitCode}"}", type = TerminalLineType.STDERR))
+            }
+            
+            isRunningBridgeTest.value = false
+            refreshTermuxState()
         }
     }
 

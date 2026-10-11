@@ -21,16 +21,13 @@ class TermuxRepository(private val context: Context) {
     private val TERMUX_USR_BIN = "/data/data/com.termux/files/usr/bin"
     private val activeProcesses = mutableMapOf<String, Process>()
 
+    val bridge = TermuxBridge(context)
+
     /**
      * Checks if Termux is installed on the user device.
      */
     fun isTermuxInstalled(): Boolean {
-        return try {
-            context.packageManager.getPackageInfo(TERMUX_PACKAGE, 0)
-            true
-        } catch (_: PackageManager.NameNotFoundException) {
-            false
-        }
+        return bridge.isTermuxInstalled()
     }
 
     /**
@@ -108,54 +105,36 @@ class TermuxRepository(private val context: Context) {
 
     /**
      * Executes a command in an interactive session, streaming output lines.
+     * Uses Termux RUN_COMMAND bridge when Termux is installed, falling back to local sandbox gracefully.
      */
     fun executeCommand(
         sessionId: String,
         command: String,
         workingDir: File,
         envVars: Map<String, String> = emptyMap()
-    ): Flow<TerminalLine> = flow {
-        emit(TerminalLine(text = "$ $command", type = TerminalLineType.COMMAND))
+    ): Flow<TerminalLine> {
+        return bridge.executeCommandStreaming(sessionId, command, workingDir)
+    }
 
-        try {
-            val builder = ProcessBuilder("sh", "-c", command)
-            builder.directory(workingDir)
+    /**
+     * Runs a harmless test command (Step 4 verification) via Termux bridge.
+     */
+    suspend fun runBridgeTestCommand(workingDir: File): TermuxCommandResult {
+        val request = TermuxCommandRequest(
+            command = "echo \"AEROCODE_TERMUX_BRIDGE_OK\" && uname -m",
+            workingDir = workingDir.absolutePath,
+            inBackground = true,
+            timeoutMs = 15_000L
+        )
+        return bridge.executeCommand(request)
+    }
 
-            val env = builder.environment()
-            env["TERM"] = "xterm-256color"
-            env["HOME"] = workingDir.absolutePath
-            val currentPath = env["PATH"] ?: "/system/bin:/system/xbin"
-            env["PATH"] = "$TERMUX_USR_BIN:$currentPath"
-            envVars.forEach { (k, v) -> env[k] = v }
-
-            val process = builder.start()
-            activeProcesses[sessionId] = process
-
-            val outReader = BufferedReader(InputStreamReader(process.inputStream))
-            val errReader = BufferedReader(InputStreamReader(process.errorStream))
-
-            var line: String?
-            while (outReader.readLine().also { line = it } != null) {
-                emit(TerminalLine(text = line ?: "", type = TerminalLineType.STDOUT))
-            }
-
-            var errLine: String?
-            while (errReader.readLine().also { errLine = it } != null) {
-                emit(TerminalLine(text = errLine ?: "", type = TerminalLineType.STDERR))
-            }
-
-            val exitCode = process.waitFor()
-            activeProcesses.remove(sessionId)
-
-            if (exitCode == 0) {
-                emit(TerminalLine(text = "[Process exited with code 0]", type = TerminalLineType.SUCCESS))
-            } else {
-                emit(TerminalLine(text = "[Process exited with error code $exitCode]", type = TerminalLineType.STDERR))
-            }
-        } catch (e: Exception) {
-            emit(TerminalLine(text = "Execution failed: ${e.message}", type = TerminalLineType.STDERR))
-        }
-    }.flowOn(Dispatchers.IO)
+    /**
+     * Runs environment diagnostics for Step 3.
+     */
+    fun performDiagnostics(workingDir: File): TermuxEnvironmentDiagnostics {
+        return bridge.performDiagnostics(workingDir)
+    }
 
     /**
      * Stops an active process (SIGINT/kill).
@@ -175,15 +154,12 @@ class TermuxRepository(private val context: Context) {
      * Creates an intent to launch or send command to Termux via RUN_COMMAND.
      */
     fun createTermuxRunIntent(command: String, workingDir: String): Intent {
-        val intent = Intent("com.termux.RUN_COMMAND").apply {
-            setClassName("com.termux", "com.termux.app.RunCommandService")
-            putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash")
-            putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf("-c", command))
-            putExtra("com.termux.RUN_COMMAND_WORKDIR", workingDir)
-            putExtra("com.termux.RUN_COMMAND_BACKGROUND", false)
-            putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0")
-        }
-        return intent
+        val request = TermuxCommandRequest(
+            command = command,
+            workingDir = workingDir,
+            inBackground = false
+        )
+        return bridge.createRunCommandIntent(request)
     }
 
     /**

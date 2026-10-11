@@ -13,6 +13,35 @@ class ProjectRepository(private val context: Context) {
 
     fun getProjectsRoot(): File = projectsRoot
 
+    /**
+     * Shared storage directory accessible to both AeroCode and Termux without root.
+     */
+    fun getSharedProjectsRoot(): File {
+        val ext = context.getExternalFilesDir(null)
+        val dir = if (ext != null) {
+            File(ext, "projects")
+        } else {
+            File(android.os.Environment.getExternalStorageDirectory(), "AeroCode/projects")
+        }
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    /**
+     * Copies a project into shared storage so Termux can execute tools in it without root.
+     */
+    fun copyProjectToSharedStorage(projectName: String): File? {
+        val src = getProjectDirectory(projectName)
+        val dest = File(getSharedProjectsRoot(), projectName)
+        return try {
+            if (!dest.exists()) dest.mkdirs()
+            src.copyRecursively(dest, overwrite = true)
+            dest
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     init {
         seedSampleProjectsIfNeeded()
     }

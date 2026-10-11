@@ -31,6 +31,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.data.model.CommandItem
 import com.example.data.model.IdeTheme
 import com.example.data.model.Language
+import com.example.data.repository.PathAccessibilityResult
 import com.example.viewmodel.ActiveModal
 import com.example.viewmodel.IdeViewModel
 
@@ -220,7 +221,14 @@ fun TermuxEnvironmentModal(viewModel: IdeViewModel, theme: IdeTheme) {
     val isInstalled by viewModel.isTermuxInstalled.collectAsState()
     val isCloning by viewModel.isCloningTermux.collectAsState()
     val cloneResult by viewModel.termuxCloneResult.collectAsState()
+    val diagnostics by viewModel.termuxDiagnostics.collectAsState()
+    val isRunningTest by viewModel.isRunningBridgeTest.collectAsState()
+    val testResult by viewModel.termuxBridgeTestResult.collectAsState()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshTermuxState()
+    }
 
     AlertDialog(
         onDismissRequest = { viewModel.activeModal.value = ActiveModal.NONE },
@@ -231,7 +239,7 @@ fun TermuxEnvironmentModal(viewModel: IdeViewModel, theme: IdeTheme) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text("Termux Environment", color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Termux Environment & Bridge", color = theme.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Surface(
                     color = if (isInstalled) theme.functionColor.copy(alpha = 0.2f) else theme.errorColor.copy(alpha = 0.2f),
                     shape = RoundedCornerShape(10.dp)
@@ -246,12 +254,119 @@ fun TermuxEnvironmentModal(viewModel: IdeViewModel, theme: IdeTheme) {
             }
         },
         text = {
-            Column(modifier = Modifier.height(340.dp)) {
+            Column(modifier = Modifier.height(420.dp).verticalScroll(rememberScrollState())) {
                 Text(
-                    text = "AeroCode reuses existing Termux packages and storage natively without re-downloading duplicate copies.",
+                    text = "AeroCode connects to Termux via the RUN_COMMAND Intent API to compile and execute code without root.",
                     color = theme.textSecondary,
                     fontSize = 11.sp
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 1. Diagnostics Cards (Step 3)
+                Text("Diagnostics & Bridge Status", color = theme.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Surface(
+                    color = theme.surfaceHighlight,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        // Check 1: App Installed
+                        DiagnosticRow(
+                            label = "1. Termux Installed",
+                            status = if (isInstalled) "Yes (${diagnostics?.versionName ?: "Ready"})" else "No (Install from F-Droid)",
+                            isOk = isInstalled,
+                            theme = theme
+                        )
+                        // Check 2: RUN_COMMAND Permission
+                        DiagnosticRow(
+                            label = "2. RUN_COMMAND Permission",
+                            status = if (diagnostics?.isPermissionGranted == true) "Granted" else "Declared in Manifest",
+                            isOk = true,
+                            theme = theme
+                        )
+                        // Check 3: External Apps Exec
+                        DiagnosticRow(
+                            label = "3. allow-external-apps",
+                            status = "Requires ~/.termux config",
+                            isOk = isInstalled,
+                            theme = theme
+                        )
+                        // Check 4: Project Path Access
+                        val pathAcc = diagnostics?.pathAccessibility
+                        val isPathOk = pathAcc is PathAccessibilityResult.Accessible
+                        DiagnosticRow(
+                            label = "4. Project Storage Path",
+                            status = if (isPathOk) "Accessible (Shared)" else "Private sandbox (See warning)",
+                            isOk = isPathOk,
+                            theme = theme
+                        )
+                        if (pathAcc is PathAccessibilityResult.Inaccessible) {
+                            Text(
+                                text = "⚠ Note: Project is in app internal storage. For non-root Termux, use shared storage (~/storage/shared/AeroCode).",
+                                color = theme.warningColor,
+                                fontSize = 9.sp,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 2. Step 4 Verification: Harmless Test Command Button
+                Button(
+                    onClick = { viewModel.runTermuxBridgeTest() },
+                    colors = ButtonDefaults.buttonColors(containerColor = theme.functionColor),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("verify_termux_bridge_button"),
+                    enabled = !isRunningTest
+                ) {
+                    if (isRunningTest) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = theme.bg, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                    } else {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = theme.bg, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                    }
+                    Text("Verify Bridge (Run Test Command)", color = theme.bg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
+                if (testResult != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        color = if (testResult!!.isSuccess) theme.functionColor.copy(alpha = 0.15f) else theme.errorColor.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            Text(
+                                text = if (testResult!!.isSuccess) "✓ Bridge Verification Success (Exit: ${testResult!!.exitCode})" else "✗ Bridge Verification Failed (Exit: ${testResult!!.exitCode})",
+                                color = if (testResult!!.isSuccess) theme.functionColor else theme.errorColor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (testResult!!.stdout.isNotEmpty()) {
+                                Text(
+                                    text = "stdout: ${testResult!!.stdout.trim()}",
+                                    color = theme.textPrimary,
+                                    fontSize = 9.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            if (testResult!!.stderr.isNotEmpty()) {
+                                Text(
+                                    text = "stderr: ${testResult!!.stderr.trim()}",
+                                    color = theme.errorColor,
+                                    fontSize = 9.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -288,54 +403,87 @@ fun TermuxEnvironmentModal(viewModel: IdeViewModel, theme: IdeTheme) {
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(tools) { tool ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = if (tool.isInstalled) "✓" else "○",
-                                    color = if (tool.isInstalled) theme.functionColor else theme.textSecondary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(tool.name, color = theme.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                    Text(tool.category, color = theme.textSecondary, fontSize = 10.sp)
-                                }
+                // Manual Setup Commands Section
+                Text("Termux Setup Instructions", color = theme.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    color = theme.bg,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text(
+                            text = "Run in Termux to enable external execution & storage:",
+                            color = theme.textSecondary,
+                            fontSize = 9.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val setupCmd = "mkdir -p ~/.termux && echo \"allow-external-apps = true\" >> ~/.termux/termux.properties && termux-reload-settings && termux-setup-storage"
+                        Text(
+                            text = setupCmd,
+                            color = theme.accent,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.clickable {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("setup_cmd", setupCmd))
+                                Toast.makeText(context, "Copied setup command!", Toast.LENGTH_SHORT).show()
                             }
+                        )
+                    }
+                }
 
-                            if (!tool.isInstalled) {
-                                Surface(
-                                    onClick = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("install_cmd", tool.installCommand))
-                                        Toast.makeText(context, "Copied: ${tool.installCommand}", Toast.LENGTH_SHORT).show()
-                                    },
-                                    color = theme.surfaceHighlight,
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = "Install in Termux",
-                                        color = theme.accent,
-                                        fontSize = 10.sp,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                                    )
-                                }
-                            } else {
-                                Text("Ready", color = theme.functionColor, fontSize = 11.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("Available Dev Tools", color = theme.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+
+                tools.forEach { tool ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (tool.isInstalled) "✓" else "○",
+                                color = if (tool.isInstalled) theme.functionColor else theme.textSecondary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(tool.name, color = theme.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(tool.category, color = theme.textSecondary, fontSize = 10.sp)
                             }
                         }
-                        Divider(color = theme.surfaceHighlight, thickness = 0.5.dp)
+
+                        if (!tool.isInstalled) {
+                            Surface(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("install_cmd", tool.installCommand))
+                                    Toast.makeText(context, "Copied: ${tool.installCommand}", Toast.LENGTH_SHORT).show()
+                                },
+                                color = theme.surfaceHighlight,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "Install in Termux",
+                                    color = theme.accent,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
+                        } else {
+                            Text("Ready", color = theme.functionColor, fontSize = 11.sp)
+                        }
                     }
+                    Divider(color = theme.surfaceHighlight, thickness = 0.5.dp)
                 }
             }
         },
@@ -360,6 +508,28 @@ fun TermuxEnvironmentModal(viewModel: IdeViewModel, theme: IdeTheme) {
             }
         }
     )
+}
+
+@Composable
+private fun DiagnosticRow(
+    label: String,
+    status: String,
+    isOk: Boolean,
+    theme: IdeTheme
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = label, color = theme.textPrimary, fontSize = 10.sp)
+        Text(
+            text = status,
+            color = if (isOk) theme.functionColor else theme.warningColor,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
 }
 
 @Composable
